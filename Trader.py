@@ -7,6 +7,7 @@ class Trader:
 
     def run(self, state: TradingState): # -> (dict[Symbol, Order], int, str)
         # our traderData will store the last 25 midprices
+        pastPrices = self.parse_traderData(state.traderData)
         # Only method required. It takes all buy and sell orders for all symbols as an input, and outputs a list of orders to be sent
         print("traderData: " + state.traderData)
         print("Observations: " + str(state.observations))
@@ -35,10 +36,13 @@ class Trader:
                     print("SELL", str(best_bid_amount) + "x", best_bid)
                     orders.append(Order(product, best_bid, -best_bid_amount))
             midPrice = self.getMidPrice(best_ask, best_bid) 
-
+            if product in pastPrices.keys():
+                pastPrices[product].append(midPrice)
+            else:
+                pastPrices[product] = [midPrice]
             result[product] = orders
-
-        traderData = "SAMPLE"  # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
+        
+        traderData = self.convertToStr(pastPrices)  # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
 
         conversions = 1
         return result, conversions, traderData
@@ -55,3 +59,13 @@ class Trader:
             else:
                 return (best_bid + best_ask) / 2
     
+    
+    # generators dictionary of last 25 prices from all the symbols, key symbol, value list of prices
+    def parse_traderData(self, traderData: str) -> dict:
+        
+        return dict()
+            
+            
+    # converts dictionary of pastPrices into a string which can be parsed as a dict the next iteration
+    def convertToStr(self, pastPrices: dict[str, list[int]]) -> str:
+        return "SAMPLE"
