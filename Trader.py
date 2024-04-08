@@ -15,7 +15,7 @@ class Trader:
         for product in state.order_depths:
             order_depth: OrderDepth = state.order_depths[product]
             orders: List[Order] = []
-            acceptable_price = 10  # Participant should calculate this value
+            acceptable_price = self.calculate_fair_price(pastPrices, product)  # Participant should calculate this value
             print("Acceptable price : " + str(acceptable_price))
             print("Buy Order depth : " + str(
                 len(order_depth.buy_orders)) + ", Sell order depth : " + str(
@@ -37,7 +37,10 @@ class Trader:
                     orders.append(Order(product, best_bid, -best_bid_amount))
             midPrice = self.getMidPrice(best_ask, best_bid) 
             if product in pastPrices.keys():
+                if len(pastPrices[product]) >= 25: # only stores the latest 25
+                    pastPrices[product].pop(0)
                 pastPrices[product].append(midPrice)
+                
             else:
                 pastPrices[product] = [midPrice]
             result[product] = orders
@@ -69,3 +72,8 @@ class Trader:
     # converts dictionary of pastPrices into a string which can be parsed as a dict the next iteration
     def convertToStr(self, pastPrices: dict[str, list[int]]) -> str:
         return "SAMPLE"
+    
+    
+    # calculates fair price valulation based on Moving Averages
+    def calculate_fair_price(self, pastPrices: dict, product: str) -> int:
+        return 10
