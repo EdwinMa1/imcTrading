@@ -65,7 +65,6 @@ class Trader:
     
     # generators dictionary of last 25 prices from all the symbols, key symbol, value list of prices
     def parse_traderData(self, traderData: str) -> dict:
-        
         return dict()
             
             
@@ -76,4 +75,17 @@ class Trader:
     
     # calculates fair price valulation based on Moving Averages
     def calculate_fair_price(self, pastPrices: dict, product: str) -> int:
+        # initial strategy, calculate MA-3, MA-5, MA-7, MA-8, MA-10, MA-15, and MA-25, then return the median
+        # when not enough data for the full MA, exclude that indicator
+        moving_averages = [3, 5, 7, 8, 10, 15, 25]
+        calculated_results = []
+        n = len(pastPrices[product])
+        sum = 0
+        for i in range(n):
+            sum += pastPrices[product][i]
+            if i in moving_averages:
+                calculated_results.append(sum / (i + 1))
+        # return sorted(calculated_results)[len(calculated_results) / 2] # median
+        
+        #default
         return 10
