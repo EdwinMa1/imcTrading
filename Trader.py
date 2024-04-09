@@ -1,6 +1,7 @@
 from datamodel import OrderDepth, UserId, TradingState, Order
 from typing import List
 import string
+import json
 
 
 class Trader:
@@ -71,12 +72,18 @@ class Trader:
     
     # generators dictionary of last 25 prices from all the symbols, key symbol, value list of prices
     def parse_traderData(self, traderData: str) -> dict:
-        return dict()
+        res = json.load(traderData)
+        print(type(res))
+        print(res)
+        return res
             
             
     # converts dictionary of pastPrices into a string which can be parsed as a dict the next iteration
     def convertToStr(self, pastPrices: dict[str, list[int]]) -> str:
-        return "SAMPLE"
+        res = json.dumps(pastPrices)
+        print(type(res))
+        print(res)
+        return res
     
     
     # calculates fair price valuation based on Moving Averages
@@ -94,10 +101,10 @@ class Trader:
             sum += pastPrices[product][i]
             if i in moving_averages:
                 calculated_results.append(sum / (i + 1))
-        # return sorted(calculated_results)[len(calculated_results) / 2] # median
+        return sorted(calculated_results)[len(calculated_results) / 2] # median
         
         #default
-        return 10
+        # return 10
     
     
 """
