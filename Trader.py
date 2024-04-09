@@ -100,9 +100,9 @@ class Trader:
         if product not in pastPrices.keys():
             return -1
         if product == 'AMETHYSTS':
-            moving_averages = {8, 10, 25}
+            moving_averages = {9} # consider return 10000, bc centers around this price anyways
         elif product == 'STARFRUIT':
-            moving_averages = {3, 7, 15}
+            moving_averages = {25}
         else:
             moving_averages = {8}
         calculated_results = []
