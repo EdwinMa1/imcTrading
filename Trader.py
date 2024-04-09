@@ -99,13 +99,18 @@ class Trader:
         # base case for PastPrices having no product
         if product not in pastPrices.keys():
             return -1
-        moving_averages = {3, 5, 7, 8, 10, 15, 25}
+        if product == 'AMETHYSTS':
+            moving_averages = {8, 10, 25}
+        elif product == 'STARFRUIT':
+            moving_averages = {3, 7, 15}
+        else:
+            moving_averages = {8}
         calculated_results = []
         n = len(pastPrices[product])
         sum_prices = 0
         for i in range(n):
             sum_prices += pastPrices[product][i]
-            if i in moving_averages:
+            if i+1 in moving_averages:
                 calculated_results.append(sum_prices / (i + 1))
         if len(calculated_results) == 0:
             return -1
