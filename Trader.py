@@ -105,7 +105,7 @@ class Trader:
         n = len(pastPrices[product])
         sum_prices = 0
         for j in range(n-1,-1,-1):
-            i = 24-j
+            i = n-1-j
             sum_prices += pastPrices[product][i]
             if i+1 in moving_averages:
                 calculated_results.append(sum_prices / (i + 1))
