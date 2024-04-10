@@ -79,16 +79,12 @@ class Trader:
         if traderData == "":
             return dict()
         res = jsonpickle.decode(traderData)
-        print(type(res))
-        print(res)
         return res
             
             
     # converts dictionary of pastPrices into a string which can be parsed as a dict the next iteration
     def convertToStr(self, pastPrices: dict[str, list[int]]) -> str:
         res = jsonpickle.encode(pastPrices)
-        print(type(res))
-        print(res)
         return res
     
     
@@ -100,15 +96,16 @@ class Trader:
         if product not in pastPrices.keys():
             return -1
         if product == 'AMETHYSTS':
-            moving_averages = {9} # consider return 10000, bc centers around this price anyways
+            moving_averages = {10} # consider return 10000, bc centers around this price anyways
         elif product == 'STARFRUIT':
-            moving_averages = {25}
+            moving_averages = {7, 8, 25}
         else:
             moving_averages = {8}
         calculated_results = []
         n = len(pastPrices[product])
         sum_prices = 0
-        for i in range(n):
+        for j in range(n-1,-1,-1):
+            i = 24-j
             sum_prices += pastPrices[product][i]
             if i+1 in moving_averages:
                 calculated_results.append(sum_prices / (i + 1))
