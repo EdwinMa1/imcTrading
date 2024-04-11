@@ -3,7 +3,7 @@ from typing import List
 import string
 import jsonpickle
 
-
+POSITION_LIMIT = 20
 class Trader:
 
     def run(self, state: TradingState): # -> (dict[Symbol, Order], int, str)
@@ -16,7 +16,6 @@ class Trader:
         for product in state.order_depths:
             
             order_depth: OrderDepth = state.order_depths[product]
-            orders: List[Order] = []
 
             # initializing the best offers from both sides to be -1 if no offers exist
             best_ask = -1
@@ -46,13 +45,19 @@ class Trader:
                 len(order_depth.sell_orders)))
             if acceptable_price == -1:
                 continue # don't trade this product this iteration
-            
+                
+            orders: List[Order] = []
             if len(order_depth.sell_orders) != 0 and int(best_ask) < acceptable_price:
                 print("BUY", str(-best_ask_amount) + "x", best_ask)
                 orders.append(Order(product, best_ask, -best_ask_amount))
-            if len(order_depth.buy_orders) != 0 and int(best_bid) > acceptable_price:
+            elif len(order_depth.buy_orders) != 0 and int(best_bid) > acceptable_price:
                 print("SELL", str(best_bid_amount) + "x", best_bid)
                 orders.append(Order(product, best_bid, -best_bid_amount))
+            else:
+                listingPrice = int(min(best_bid+1, midPrice))
+                listingAmount = POSITION_LIMIT - state.position[product]
+                print("BUY", str(listingAmount) + "x", listingPrice)
+                orders.append(Order(product, listingPrice, listingAmount))
 
             result[product] = orders
         
@@ -96,9 +101,9 @@ class Trader:
         if product not in pastPrices.keys():
             return -1
         if product == 'AMETHYSTS':
-            moving_averages = {10} # consider return 10000, bc centers around this price anyways
+            moving_averages = {5,20,25} # consider return 10000, bc centers around this price anyways
         elif product == 'STARFRUIT':
-            moving_averages = {7, 8, 25}
+            moving_averages = {15}
         else:
             moving_averages = {8}
         calculated_results = []
