@@ -14,9 +14,9 @@ class Trader:
         print("Observations: " + str(state.observations))
         result = {}
         for product in state.order_depths:
-            
+            if product == "AMETHYSTS":
+                continue
             order_depth: OrderDepth = state.order_depths[product]
-
             # initializing the best offers from both sides to be -1 if no offers exist
             best_ask = -1
             best_bid = -1
@@ -39,27 +39,15 @@ class Trader:
             
             acceptable_price = self.calculate_fair_price(pastPrices, product)  # Participant should calculate this value
             
-            print("Acceptable price : " + str(acceptable_price))
-            print("Buy Order depth : " + str(
-                len(order_depth.buy_orders)) + ", Sell order depth : " + str(
-                len(order_depth.sell_orders)))
+            # print("Acceptable price : " + str(acceptable_price))
+            # print("Buy Order depth : " + str(
+            #     len(order_depth.buy_orders)) + ", Sell order depth : " + str(
+            #     len(order_depth.sell_orders)))
             if acceptable_price == -1:
                 continue # don't trade this product this iteration
                 
-            orders: List[Order] = []
-            if len(order_depth.sell_orders) != 0 and int(best_ask) < acceptable_price:
-                print("BUY", str(-best_ask_amount) + "x", best_ask)
-                orders.append(Order(product, best_ask, -best_ask_amount))
-            elif len(order_depth.buy_orders) != 0 and int(best_bid) > acceptable_price:
-                print("SELL", str(best_bid_amount) + "x", best_bid)
-                orders.append(Order(product, best_bid, -best_bid_amount))
-            else:
-                listingPrice = int(min(best_bid+1, midPrice))
-                listingAmount = POSITION_LIMIT - state.position[product]
-                print("BUY", str(listingAmount) + "x", listingPrice)
-                orders.append(Order(product, listingPrice, listingAmount))
-
-            result[product] = orders
+            
+            result[product] = self.order_strategy(state, product, acceptable_price, midPrice, best_ask, best_bid, best_ask_amount, best_bid_amount)
         
         traderData = self.convertToStr(pastPrices)  # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
 
@@ -101,6 +89,7 @@ class Trader:
         if product not in pastPrices.keys():
             return -1
         if product == 'AMETHYSTS':
+            
             moving_averages = {20} # consider return 10000, bc centers around this price anyways
         elif product == 'STARFRUIT':
             moving_averages = {25}
@@ -123,7 +112,28 @@ class Trader:
         
         #default
         # return 10
-    
+
+    def order_strategy(self, state, product, acceptable_price, midPrice, best_ask, best_bid, best_ask_amount, best_bid_amount):
+        order_depth: OrderDepth = state.order_depths[product]
+        orders: List[Order] = []
+        if len(order_depth.sell_orders) != 0 and int(best_ask) < acceptable_price:
+            print("BUY", str(-best_ask_amount) + "x", best_ask)
+            orders.append(Order(product, best_ask, -best_ask_amount))
+        elif len(order_depth.buy_orders) != 0 and int(best_bid) > acceptable_price:
+            print("SELL", str(best_bid_amount) + "x", best_bid)
+            orders.append(Order(product, best_bid, -best_bid_amount))
+        else:
+            if midPrice < acceptable_price:
+                listingPrice = int(min(best_bid + 1, midPrice))
+                listingAmount = POSITION_LIMIT - state.position[product]
+                print("BUY", str(listingAmount) + "x", listingPrice)
+                orders.append(Order(product, listingPrice, listingAmount))
+            else:
+                listingPrice = int(max(best_ask - 1, midPrice))
+                listingAmount = -POSITION_LIMIT - state.position[product]
+                print("SELL", str(listingAmount) + "x", listingPrice)
+                orders.append(Order(product, listingPrice, listingAmount))
+        return orders
     
 """
 Need to implement parsing function + converting function

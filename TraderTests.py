@@ -10,7 +10,7 @@ class TestTrader(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-# o = datamodel.Observation(dict(), dict())
-# s = datamodel.TradingState("", 0, dict(), dict(), dict(), dict(), dict(), o)
-# t = Trader()
-# t.run(s)
+o = datamodel.Observation(dict(), dict())
+s = datamodel.TradingState("", 0, dict(), dict(), dict(), dict(), dict(), o)
+t = Trader()
+t.run(s)
