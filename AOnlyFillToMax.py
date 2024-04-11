@@ -16,8 +16,8 @@ class Trader:
         for product in state.order_depths:
             # if product == "AMETHYSTS":
             #     continue
-            # if product == "STARFRUIT":
-            #     continue
+            if product == "STARFRUIT":
+                continue
             order_depth: OrderDepth = state.order_depths[product]
             # initializing the best offers from both sides to be -1 if no offers exist
             best_ask = -1
@@ -92,7 +92,8 @@ class Trader:
         if product not in pastPrices.keys():
             return -1
         if product == 'AMETHYSTS':
-            moving_averages = {20} # consider return 10000, bc centers around this price anyways
+            return 10000
+            # moving_averages = {20} # consider return 10000, bc centers around this price anyways
         elif product == 'STARFRUIT':
             moving_averages = {16}
         else:
@@ -118,28 +119,57 @@ class Trader:
     def order_strategy(self, state, product, acceptable_price, midPrice, best_ask, best_bid, best_ask_amount, best_bid_amount):
         order_depth: OrderDepth = state.order_depths[product]
         orders: List[Order] = []
+        try:
+            current_position = state.position[product]
+        except KeyError:
+            current_position = 0
         if product == 'AMETHYSTS':
-            if len(order_depth.sell_orders) != 0 and int(best_ask) < acceptable_price:
-                print("BUY", str(-best_ask_amount) + "x", best_ask)
-                orders.append(Order(product, best_ask, -best_ask_amount))
-            elif len(order_depth.buy_orders) != 0 and int(best_bid) > acceptable_price:
-                print("SELL", str(best_bid_amount) + "x", best_bid)
-                orders.append(Order(product, best_bid, -best_bid_amount))
-            else:
-                if midPrice < acceptable_price:
-                    listingPrice = int(min(best_bid + 1, midPrice))
-                    listingAmount = POSITION_LIMIT - state.position[product]
-                    print("BUY", str(listingAmount) + "x", listingPrice)
-                    orders.append(Order(product, listingPrice, listingAmount))
+            i = 0
+            while i < len(order_depth.sell_orders) and i < 3:
+                ask_price, ask_amount = list(order_depth.sell_orders.items())[i]
+                ask_amount = -ask_amount
+                if int(ask_price) < acceptable_price:
+                    if current_position + ask_amount >= POSITION_LIMIT:
+                        orders.append(Order(product, ask_price, POSITION_LIMIT - current_position))
+                        break
+                    orders.append(Order(product, ask_price, ask_amount))
+                    i +=1
+                    current_position += ask_amount
                 else:
-                    listingPrice = int(max(best_ask - 1, midPrice))
-                    listingAmount = -POSITION_LIMIT - state.position[product]
-                    print("SELL", str(listingAmount) + "x", listingPrice)
-                    orders.append(Order(product, listingPrice, listingAmount))
+                    break
+            i = 0
+            while i < len(order_depth.buy_orders) and i < 3:
+                buy_price, buy_amount = list(order_depth.buy_orders.items())[i]
+                if int(buy_price) > acceptable_price:
+                    if current_position - buy_amount <= -POSITION_LIMIT:
+                        orders.append(Order(product, buy_price, -POSITION_LIMIT - current_position))
+                        break
+                    orders.append(Order(product, buy_price, -buy_amount))
+                    i += 1
+                    current_position -= buy_amount
+                else:
+                    break  
+            
+            if midPrice < acceptable_price:
+                listingPrice = int(min(best_bid + 1, midPrice))
+                if current_position + 3 < POSITION_LIMIT:
+                    orders.append(Order(product, listingPrice, 3))
+            else:
+                listingPrice = int(max(best_ask - 1, midPrice))
+                if current_position - 3 > -POSITION_LIMIT:
+                    orders.append(Order(product, listingPrice, -3))
+
         elif product == 'STARFRUIT':
+            if len(order_depth.sell_orders) != 0 and int(best_ask) < acceptable_price - 5:
+                orders.append(Order(product, best_ask, best_ask_amount))
+            elif len(order_depth.buy_orders) != 0 and int(best_bid) > acceptable_price + 5:
+                orders.append(Order(product, best_bid, -best_bid_amount))
             if best_bid+1 < best_ask-1:
-                orders.append(Order(product, best_bid+1, 20))
-                orders.append(Order(product, best_ask-1, -20))
+                orders.append(Order(product, best_bid+1, 4))
+                orders.append(Order(product, best_ask-1, -4))
+            else:
+                orders.append(Order(product, best_bid, 6))
+                orders.append(Order(product, best_ask, -6))
         return orders
     
 """
