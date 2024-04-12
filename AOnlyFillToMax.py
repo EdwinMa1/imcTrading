@@ -14,8 +14,8 @@ class Trader:
         print("Observations: " + str(state.observations))
         result = {}
         for product in state.order_depths:
-            # if product == "AMETHYSTS":
-            #     continue
+            if product == "AMETHYSTS":
+                continue
             if product == "STARFRUIT":
                 continue
             order_depth: OrderDepth = state.order_depths[product]
@@ -39,7 +39,8 @@ class Trader:
                 pastPrices[product].append(midPrice)
             else:
                 pastPrices[product] = [midPrice]
-
+            # if 
+            # pastPrices["StarfruitPeaks"] = (state.timestamp, midPrice)
             acceptable_price = self.calculate_fair_price(pastPrices, product)  # Participant should calculate this value
 
             # print("Acceptable price : " + str(acceptable_price))
@@ -131,6 +132,7 @@ class Trader:
                 if int(ask_price) < acceptable_price:
                     if current_position + ask_amount >= POSITION_LIMIT:
                         orders.append(Order(product, ask_price, POSITION_LIMIT - current_position))
+                        current_position = POSITION_LIMIT
                         break
                     orders.append(Order(product, ask_price, ask_amount))
                     i +=1
@@ -143,21 +145,28 @@ class Trader:
                 if int(buy_price) > acceptable_price:
                     if current_position - buy_amount <= -POSITION_LIMIT:
                         orders.append(Order(product, buy_price, -POSITION_LIMIT - current_position))
+                        current_position = -POSITION_LIMIT
                         break
                     orders.append(Order(product, buy_price, -buy_amount))
                     i += 1
                     current_position -= buy_amount
                 else:
-                    break  
-            
-            if midPrice < acceptable_price:
-                listingPrice = int(min(best_bid + 1, midPrice))
-                if current_position + 3 < POSITION_LIMIT:
-                    orders.append(Order(product, listingPrice, 3))
-            else:
-                listingPrice = int(max(best_ask - 1, midPrice))
-                if current_position - 3 > -POSITION_LIMIT:
-                    orders.append(Order(product, listingPrice, -3))
+                    break
+            listAmount = 5
+            while listAmount > 0:
+                if midPrice < acceptable_price:
+                    listingPrice = int(min(best_bid + 1, midPrice))
+                    if current_position + listAmount < POSITION_LIMIT:
+                        orders.append(Order(product, listingPrice, listAmount))
+                        current_position += listAmount
+                        
+                else:
+                    listingPrice = int(max(best_ask - 1, midPrice))
+                    if current_position - listAmount > -POSITION_LIMIT:
+                        orders.append(Order(product, listingPrice, -listAmount))
+                        current_position -= listAmount
+                        
+                listAmount -= 1
 
         elif product == 'STARFRUIT':
             if len(order_depth.sell_orders) != 0 and int(best_ask) < acceptable_price - 5:

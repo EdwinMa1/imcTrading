@@ -7,7 +7,7 @@ import jsonpickle
 Time = int
 Symbol = str
 Product = str
-Position = int
+ = int
 UserId = str
 ObservationValue = int
 
