@@ -14,8 +14,8 @@ class Trader:
         print("Observations: " + str(state.observations))
         result = {}
         for product in state.order_depths:
-            if product == "AMETHYSTS":
-                continue
+            # if product == "AMETHYSTS":
+            #     continue
             # if product == "STARFRUIT":
             #     continue
             order_depth: OrderDepth = state.order_depths[product]
@@ -39,21 +39,20 @@ class Trader:
                 pastPrices[product].append(midPrice)
             else:
                 pastPrices[product] = [midPrice]
-            if product == "STARFRUIT":
-                foundExtrema = False
-                print('here')
-                if self.lastIsPeak(pastPrices, product):
-                    print('found')
-                    timeStamp, priceExtrema, peak = state.timestamp - 100, pastPrices[product][-2], True
-                    foundExtrema = True
-                elif self.lastIsTrough(pastPrices, product):
-                    timeStamp, priceExtrema, peak = state.timestamp - 100, pastPrices[product][-2], False
-                    foundExtrema = True
-                if foundExtrema:
-                    if "starfruitPeaksAndTroughs" in pastPrices.keys():
-                        pastPrices["starfruitPeaksAndTroughs"].append((timeStamp, priceExtrema, peak))
-                    else:
-                        pastPrices["starfruitPeaksAndTroughs"] = [(timeStamp, priceExtrema, peak)]
+            # if product == "STARFRUIT":
+            #     foundExtrema = False
+            #     if self.lastIsPeak(pastPrices, product):
+            #         print('found')
+            #         timeStamp, priceExtrema, peak = state.timestamp - 100, pastPrices[product][-2], True
+            #         foundExtrema = True
+            #     elif self.lastIsTrough(pastPrices, product):
+            #         timeStamp, priceExtrema, peak = state.timestamp - 100, pastPrices[product][-2], False
+            #         foundExtrema = True
+            #     if foundExtrema:
+            #         if "starfruitPeaksAndTroughs" in pastPrices.keys():
+            #             pastPrices["starfruitPeaksAndTroughs"].append((timeStamp, priceExtrema, peak))
+            #         else:
+            #             pastPrices["starfruitPeaksAndTroughs"] = [(timeStamp, priceExtrema, peak)]
 
                         
             acceptable_price = self.calculate_fair_price(pastPrices, product)  # Participant should calculate this value
@@ -128,31 +127,60 @@ class Trader:
         return calculated_results[index] # median
        
         
-        #default
-        # return 10
-    
-    def lastIsPeak(self, pastPrices, product):
-        print('ran')
-        if len(pastPrices) < 3:
-            return False
+    def lastIsPeak(self, pastPrices, product):        
         n = len(pastPrices[product])
-        print("past: ")
-        print(pastPrices[product][n-3], pastPrices[product][n-2], pastPrices[product][n-1])
+        if n < 3:
+            return False
+        print('HERE')
+        print(pastPrices[product])
+        print(pastPrices[product][0]) #WHY CANT I INDEX???
+        print('DONE')
+        return False
         return pastPrices[product][n-3] < pastPrices[product][n-2] and pastPrices[product][n-2] > pastPrices[product][n-1]
     
     def lastIsTrough(self, pastPrices, product):
-        if len(pastPrices) < 3:
-            return False
         n = len(pastPrices[product])
-        print(pastPrices[product][-1])
+        if n < 3:
+            return False
+        
+        return False
         return pastPrices[product][n-3] > pastPrices[product][n-2] and pastPrices[product][n-2] < pastPrices[product][n-1]
     
     def evaluateExtrema(self, pastPrices):
         # pastPrices["starfruitPeaksAndTroughs"] 
         # determine up or downtrend, then buy on uptrend for trough, sell on downtrend for peak
-        
+        if len(pastPrices["starfruitPeaksAndTroughs"]) >= 6: 
+            pass
+            
+            # if 3 peaks higher than the last 
+            # if 3 trough lower than the last
         pass
-
+    
+    
+    def three_peaks_higher(self, pastPrices):
+        i = -5
+        highest = -1
+        while i < 0: 
+            if pastPrices["starfruitPeaksAndTroughs"][i][2]:
+                if pastPrices["starfruitPeaksAndTroughs"][i][1] > highest:
+                    highest = pastPrices["starfruitPeaksAndTroughs"][i][1]
+                else:
+                    return False 
+            i += 1
+        return True
+        
+    def three_troughs_lower(self, pastPrices):
+        i = -5
+        lowest = 1000000
+        while i < 0:
+            if not pastPrices["starfruitPeaksAndTroughs"][i][2]:
+                if pastPrices["starfruitPeaksAndTroughs"][i][1] < lowest:
+                    lowest = pastPrices["starfruitPeaksAndTroughs"][i][1]
+                else:
+                    return False
+            i += 1
+        return True
+    
     def order_strategy(self, state, product, acceptable_price, midPrice, best_ask, best_bid, best_ask_amount, best_bid_amount):
         order_depth: OrderDepth = state.order_depths[product]
         orders: List[Order] = []
@@ -205,9 +233,9 @@ class Trader:
                 listAmount -= 1
 
         elif product == 'STARFRUIT':
-            if len(order_depth.sell_orders) != 0 and int(best_ask) < acceptable_price - 4:
+            if len(order_depth.sell_orders) != 0 and int(best_ask) < acceptable_price - 2:
                 orders.append(Order(product, best_ask, -best_ask_amount))
-            elif len(order_depth.buy_orders) != 0 and int(best_bid) > acceptable_price + 4:
+            elif len(order_depth.buy_orders) != 0 and int(best_bid) > acceptable_price + 2:
                 orders.append(Order(product, best_bid, -best_bid_amount))
             listAmount = 4
             if midPrice < acceptable_price:
