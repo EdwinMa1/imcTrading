@@ -126,6 +126,8 @@ class Trader:
             return -1
         index = len(calculated_results) // 2
         calculated_results = sorted(calculated_results) 
+        if product == 'STARFRUIT':
+            return calculated_results[index] + self.evaluateExtrema(pastPrices) * 3
         return calculated_results[index] # median
        
         
@@ -147,11 +149,11 @@ class Trader:
         if len(pastPrices["starfruitPeaksAndTroughs"]) >= 6:         
             # uptrend
             if self.three_peaks_higher(pastPrices) and self.three_troughs_higher(pastPrices):
-                pass
+                return 1
             # downtrend
             elif self.three_troughs_lower(pastPrices) and self.three_peaks_lower(pastPrices):
-                pass
-        pass
+                return -1
+        return 0
     
     
     def three_peaks_higher(self, pastPrices):
