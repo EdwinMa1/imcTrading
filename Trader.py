@@ -41,7 +41,7 @@ class Trader:
                 pastPrices[product].append(midPrice)
             else:
                 pastPrices[product] = [midPrice]
-            if product == "STARFRUIT":
+            if product != "AMETHYSTS":
                 foundExtrema = False
                 if self.lastIsPeak(pastPrices, product):
                     print('found')
@@ -51,13 +51,14 @@ class Trader:
                     timeStamp, priceExtrema, peak = state.timestamp - 100, pastPrices[product][-2], False
                     foundExtrema = True
                 if foundExtrema:
-                    if "starfruitPeaksAndTroughs" in pastPrices.keys():
-                        pastPrices["starfruitPeaksAndTroughs"].append((timeStamp, priceExtrema, peak))
+                    extremaKey = product + "PeaksAndTroughs"
+                    if extremaKey in pastPrices.keys():
+                        pastPrices[extremaKey].append((timeStamp, priceExtrema, peak))
                     else:
-                        pastPrices["starfruitPeaksAndTroughs"] = [(timeStamp, priceExtrema, peak)]
+                        pastPrices[extremaKey] = [(timeStamp, priceExtrema, peak)]
 
                         
-            acceptable_price = self.calculate_fair_price(pastPrices, product)  # Participant should calculate this value
+            acceptable_price = self.calculate_fair_price(pastPrices, product, extremaKey)  # Participant should calculate this value
 
             # print("Acceptable price : " + str(acceptable_price))
             # print("Buy Order depth : " + str(
@@ -102,7 +103,7 @@ class Trader:
     
     
     # calculates fair price valuation based on Moving Averages
-    def calculate_fair_price(self, pastPrices: dict, product: str) -> float:
+    def calculate_fair_price(self, pastPrices: dict, product: str, extremaKey: str) -> float:
         # initial strategy, calculate MA-3, MA-5, MA-7, MA-8, MA-10, MA-15, and MA-25, then return the median
         # when not enough data for the full MA, exclude that indicator
         # base case for PastPrices having no product
@@ -127,7 +128,7 @@ class Trader:
         index = len(calculated_results) // 2
         calculated_results = sorted(calculated_results) 
         if product == 'STARFRUIT':
-            return calculated_results[index] + self.evaluateExtrema(pastPrices) * 3
+            return calculated_results[index] + self.evaluateExtrema(pastPrices, extremaKey) * 3
         return calculated_results[index] # median
        
         
@@ -143,62 +144,61 @@ class Trader:
             return False
         return pastPrices[product][-3] > pastPrices[product][-2] and pastPrices[product][-2] < pastPrices[product][-1]
     
-    def evaluateExtrema(self, pastPrices):
-        # pastPrices["starfruitPeaksAndTroughs"] 
+    def evaluateExtrema(self, pastPrices, extremaKey):
         # determine up or downtrend, then buy on uptrend for trough, sell on downtrend for peak
-        if len(pastPrices["starfruitPeaksAndTroughs"]) >= 6:         
+        if len(pastPrices[extremaKey]) >= 6:         
             # uptrend
-            if self.three_peaks_higher(pastPrices) and self.three_troughs_higher(pastPrices):
+            if self.three_peaks_higher(pastPrices, extremaKey) and self.three_troughs_higher(pastPrices, extremaKey):
                 return 1
             # downtrend
-            elif self.three_troughs_lower(pastPrices) and self.three_peaks_lower(pastPrices):
+            elif self.three_troughs_lower(pastPrices, extremaKey) and self.three_peaks_lower(pastPrices, extremaKey):
                 return -1
         return 0
     
     
-    def three_peaks_higher(self, pastPrices):
+    def three_peaks_higher(self, pastPrices, extremaKey):
         i = -6
         highest = -1
         while i < 0: 
-            if pastPrices["starfruitPeaksAndTroughs"][i][2]:
-                if pastPrices["starfruitPeaksAndTroughs"][i][1] > highest:
-                    highest = pastPrices["starfruitPeaksAndTroughs"][i][1]
+            if pastPrices[extremaKey][i][2]:
+                if pastPrices[extremaKey][i][1] > highest:
+                    highest = pastPrices[extremaKey][i][1]
                 else:
                     return False 
             i += 1
         return True
         
-    def three_troughs_higher(self, pastPrices):
+    def three_troughs_higher(self, pastPrices, extremaKey):
         i = -6
         highest = -1
         while i < 0:
-            if not pastPrices["starfruitPeaksAndTroughs"][i][2]:
-                if pastPrices["starfruitPeaksAndTroughs"][i][1] > highest:
-                    highest = pastPrices["starfruitPeaksAndTroughs"][i][1]
+            if not pastPrices[extremaKey][i][2]:
+                if pastPrices[extremaKey][i][1] > highest:
+                    highest = pastPrices[extremaKey][i][1]
                 else:
                     return False
             i += 1
         return True
         
-    def three_peaks_lower(self, pastPrices):
+    def three_peaks_lower(self, pastPrices, extremaKey):
         i = -6
         lowest = 1000000
         while i < 0:
-            if pastPrices["starfruitPeaksAndTroughs"][i][2]:
-                if pastPrices["starfruitPeaksAndTroughs"][i][1] < lowest:
-                    lowest = pastPrices["starfruitPeaksAndTroughs"][i][1]
+            if pastPrices[extremaKey][i][2]:
+                if pastPrices[extremaKey][i][1] < lowest:
+                    lowest = pastPrices[extremaKey][i][1]
                 else:
                     return False
             i += 1
         return True
         
-    def three_troughs_lower(self, pastPrices):
+    def three_troughs_lower(self, pastPrices, extremaKey):
         i = -6
         lowest = 1000000
         while i < 0:
-            if not pastPrices["starfruitPeaksAndTroughs"][i][2]:
-                if pastPrices["starfruitPeaksAndTroughs"][i][1] < lowest:
-                    lowest = pastPrices["starfruitPeaksAndTroughs"][i][1]
+            if not pastPrices[extremaKey][i][2]:
+                if pastPrices[extremaKey][i][1] < lowest:
+                    lowest = pastPrices[extremaKey][i][1]
                 else:
                     return False
             i += 1
