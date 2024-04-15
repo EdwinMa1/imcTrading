@@ -41,6 +41,8 @@ class Trader:
                 pastPrices[product].append(midPrice)
             else:
                 pastPrices[product] = [midPrice]
+            extremaKey = product + "PeaksAndTroughs"
+
             if product != "AMETHYSTS":
                 foundExtrema = False
                 if self.lastIsPeak(pastPrices, product):
@@ -51,9 +53,10 @@ class Trader:
                     timeStamp, priceExtrema, peak = state.timestamp - 100, pastPrices[product][-2], False
                     foundExtrema = True
                 if foundExtrema:
-                    extremaKey = product + "PeaksAndTroughs"
                     if extremaKey in pastPrices.keys():
                         pastPrices[extremaKey].append((timeStamp, priceExtrema, peak))
+                        if len(pastPrices[extremaKey]) > 20:
+                            pastPrices[extremaKey].pop(0)
                     else:
                         pastPrices[extremaKey] = [(timeStamp, priceExtrema, peak)]
 
@@ -128,7 +131,7 @@ class Trader:
         index = len(calculated_results) // 2
         calculated_results = sorted(calculated_results) 
         if product == 'STARFRUIT':
-            return calculated_results[index] + self.evaluateExtrema(pastPrices, extremaKey) * 3
+            return calculated_results[index] + self.evaluateExtrema(pastPrices, product, extremaKey) * 3
         return calculated_results[index] # median
        
         
@@ -144,18 +147,31 @@ class Trader:
             return False
         return pastPrices[product][-3] > pastPrices[product][-2] and pastPrices[product][-2] < pastPrices[product][-1]
     
-    def evaluateExtrema(self, pastPrices, extremaKey):
+    def evaluateExtrema(self, pastPrices, product, extremaKey):
         # determine up or downtrend, then buy on uptrend for trough, sell on downtrend for peak
         if len(pastPrices[extremaKey]) >= 6:         
             # uptrend
             if self.three_peaks_higher(pastPrices, extremaKey) and self.three_troughs_higher(pastPrices, extremaKey):
                 return 1
+            if self.last_four_increasing(pastPrices, product, extremaKey):
+                return 1
             # downtrend
             elif self.three_troughs_lower(pastPrices, extremaKey) and self.three_peaks_lower(pastPrices, extremaKey):
                 return -1
+            if self.last_four_decreasing(pastPrices, product, extremaKey):
+                return -1
         return 0
     
-    
+    def last_four_increasing(self, pastPrices, product, extremaKey):
+        return False
+        # if extremaKey in pastPrices:
+            # if pastPrices[extremaKey][-1][0] < state.timestamp-400:
+
+    def last_four_decreasing(self, pastPrices, product, extremaKey):
+        return False
+        # if extremaKey in pastPrices:
+    # if pastPrices[extremaKey][-1][0] < state.timestamp-400:
+        
     def three_peaks_higher(self, pastPrices, extremaKey):
         i = -6
         highest = -1
@@ -222,7 +238,7 @@ class Trader:
                         current_position = POSITION_LIMIT
                         break
                     orders.append(Order(product, ask_price, ask_amount))
-                    i +=1
+                    i += 1
                     current_position += ask_amount
                 else:
                     break
