@@ -14,11 +14,13 @@ class Trader:
         print("Observations: " + str(state.observations))
         result = {}
         for product in state.order_depths:
-            if product == "AMETHYSTS":
-                continue
+            # if product == "AMETHYSTS":
+            #     continue
             # if product == "STARFRUIT":
             #     continue
-            if product == "ORCHIDS":
+            # if product == "ORCHIDS":
+            #     continue
+            if product in {"CHOCOLATE", "STRAWBERRIES","ROSES","GIFT_BASKET"}:
                 continue
             order_depth: OrderDepth = state.order_depths[product]
             # initializing the best offers from both sides to be -1 if no offers exist
@@ -42,11 +44,10 @@ class Trader:
             else:
                 pastPrices[product] = [midPrice]
             extremaKey = product + "PeaksAndTroughs"
-
+            tradeNow = False
             if product != "AMETHYSTS":
                 foundExtrema = False
                 if self.lastIsPeak(pastPrices, product):
-                    print('found')
                     timeStamp, priceExtrema, peak = state.timestamp - 100, pastPrices[product][-2], True
                     foundExtrema = True
                 elif self.lastIsTrough(pastPrices, product):
@@ -59,6 +60,7 @@ class Trader:
                             pastPrices[extremaKey].pop(0)
                     else:
                         pastPrices[extremaKey] = [(timeStamp, priceExtrema, peak)]
+                    tradeNow = True
 
                         
             acceptable_price = self.calculate_fair_price(pastPrices, product, extremaKey)  # Participant should calculate this value
@@ -71,7 +73,7 @@ class Trader:
                 continue # don't trade this product this iteration
 
 
-            result[product] = self.order_strategy(state, product, acceptable_price, midPrice, best_ask, best_bid, best_ask_amount, best_bid_amount)
+            result[product] = self.order_strategy(state, product, acceptable_price, midPrice, best_ask, best_bid, best_ask_amount, best_bid_amount, tradeNow, pastPrices, extremaKey)
         
         traderData = self.convertToStr(pastPrices)  # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
 
@@ -117,7 +119,7 @@ class Trader:
         elif product == 'STARFRUIT':
             moving_averages = {5, 8, 15}
         else:
-            moving_averages = {8}
+            moving_averages = {8, 15, 20}
         calculated_results = []
         n = len(pastPrices[product])
         sum_prices = 0
@@ -220,7 +222,7 @@ class Trader:
             i += 1
         return True
     
-    def order_strategy(self, state, product, acceptable_price, midPrice, best_ask, best_bid, best_ask_amount, best_bid_amount):
+    def order_strategy(self, state, product, acceptable_price, midPrice, best_ask, best_bid, best_ask_amount, best_bid_amount, tradeNow, pastPrices, extremaKey):
         order_depth: OrderDepth = state.order_depths[product]
         orders: List[Order] = []
         try:
@@ -272,11 +274,21 @@ class Trader:
                 listAmount -= 1
 
         elif product == 'STARFRUIT':
-            if len(order_depth.sell_orders) != 0 and int(best_ask) < acceptable_price - 2:
+            listAmount = 2
+            if tradeNow and not pastPrices[extremaKey][-1][2] and self.evaluateExtrema(pastPrices, product, extremaKey) > 0:
                 orders.append(Order(product, best_ask, -best_ask_amount))
-            elif len(order_depth.buy_orders) != 0 and int(best_bid) > acceptable_price + 2:
+                current_position += -best_ask_amount
+                if current_position + listAmount < POSITION_LIMIT:
+                    orders.append(Order(product, best_bid+2, listAmount))
+                    current_position += listAmount
+                listAmount = 8
+            elif tradeNow and pastPrices[extremaKey][-1][2] and self.evaluateExtrema(pastPrices, product, extremaKey) < 0:
                 orders.append(Order(product, best_bid, -best_bid_amount))
-            listAmount = 4
+                current_position -= best_bid_amount
+                if current_position - listAmount > -POSITION_LIMIT:
+                    orders.append(Order(product, best_ask-2, -listAmount))
+                    current_position -= listAmount
+                listAmount = 8
             if midPrice < acceptable_price:
                 listingPrice = int(min(best_bid + 1, midPrice))
                 if current_position + listAmount < POSITION_LIMIT:
@@ -287,6 +299,12 @@ class Trader:
                 if current_position - listAmount > -POSITION_LIMIT:
                     orders.append(Order(product, listingPrice, -listAmount))
                     current_position -= listAmount
+        else:
+            pass
+            # if len(order_depth.sell_orders) != 0 and int(best_ask) < acceptable_price - 10:
+            #     orders.append(Order(product, best_ask, -best_ask_amount))
+            # elif len(order_depth.buy_orders) != 0 and int(best_bid) > acceptable_price + 10:
+            #     orders.append(Order(product, best_ask, -best_ask_amount))
         return orders
     
 """
