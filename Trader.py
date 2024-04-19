@@ -8,7 +8,7 @@ class Trader:
 
     def run(self, state: TradingState): # -> (dict[Symbol, Order], int, str)
         # our traderData will store the last 25 mid-prices
-        pastPrices = self.parse_traderData(state.traderData)
+        pastPrices = parse_traderData(state.traderData)
         # Only method required. It takes all buy and sell orders for all symbols as an input, and outputs a list of orders to be sent
         print("traderData: " + state.traderData)
         print("Observations: " + str(state.observations))
@@ -36,7 +36,7 @@ class Trader:
             if len(order_depth.buy_orders) != 0:
                 best_bid, best_bid_amount = list(order_depth.buy_orders.items())[0]
 
-            midPrice = self.getMidPrice(best_ask, best_bid)
+            midPrice = getMidPrice(best_ask, best_bid)
             if product in pastPrices.keys():
                 if len(pastPrices[product]) > 25:  # only stores the latest 25
                     pastPrices[product].pop(0)
@@ -47,10 +47,10 @@ class Trader:
             tradeNow = False
             if product != "AMETHYSTS":
                 foundExtrema = False
-                if self.lastIsPeak(pastPrices, product):
+                if lastIsPeak(pastPrices, product):
                     timeStamp, priceExtrema, peak = state.timestamp - 100, pastPrices[product][-2], True
                     foundExtrema = True
-                elif self.lastIsTrough(pastPrices, product):
+                elif lastIsTrough(pastPrices, product):
                     timeStamp, priceExtrema, peak = state.timestamp - 100, pastPrices[product][-2], False
                     foundExtrema = True
                 if foundExtrema:
@@ -63,7 +63,7 @@ class Trader:
                     tradeNow = True
 
                         
-            acceptable_price = self.calculate_fair_price(pastPrices, product, extremaKey)  # Participant should calculate this value
+            acceptable_price = calculate_fair_price(pastPrices, product, extremaKey)  # Participant should calculate this value
 
             # print("Acceptable price : " + str(acceptable_price))
             # print("Buy Order depth : " + str(
@@ -73,239 +73,239 @@ class Trader:
                 continue # don't trade this product this iteration
 
 
-            result[product] = self.order_strategy(state, product, acceptable_price, midPrice, best_ask, best_bid, best_ask_amount, best_bid_amount, tradeNow, pastPrices, extremaKey)
+            result[product] = order_strategy(state, product, acceptable_price, midPrice, best_ask, best_bid, best_ask_amount, best_bid_amount, tradeNow, pastPrices, extremaKey)
         
-        traderData = self.convertToStr(pastPrices)  # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
+        traderData = convertToStr(pastPrices)  # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
 
         conversions = 1
         return result, conversions, traderData
     
-    # gets the middle value between both sides of a bid-ask spread, i.e. the current price valuation, returns -1 if no spread exists
-    def getMidPrice(self, best_ask: int, best_bid: int) -> float:
-        if best_ask == -1 and best_bid == -1:
-            return -1 # no midPrice Exists
+# gets the middle value between both sides of a bid-ask spread, i.e. the current price valuation, returns -1 if no spread exists
+def getMidPrice(best_ask: int, best_bid: int) -> float:
+    if best_ask == -1 and best_bid == -1:
+        return -1 # no midPrice Exists
+    else:
+        if best_ask == -1:
+            return best_bid
+        elif best_bid == -1:
+            return best_ask
         else:
-            if best_ask == -1:
-                return best_bid
-            elif best_bid == -1:
-                return best_ask
+            return (best_bid + best_ask) / 2
+
+
+# generators dictionary of last 25 prices from all the symbols, key symbol, value list of prices
+def parse_traderData(traderData: str) -> dict:
+    if traderData == "":
+        return dict()
+    res = jsonpickle.decode(traderData)
+    return res
+        
+        
+# converts dictionary of pastPrices into a string which can be parsed as a dict the next iteration
+def convertToStr(pastPrices: dict[str, list[int]]) -> str:
+    res = jsonpickle.encode(pastPrices)
+    return res
+
+
+# calculates fair price valuation based on Moving Averages
+def calculate_fair_price(pastPrices: dict, product: str, extremaKey: str) -> float:
+    # initial strategy, calculate MA-3, MA-5, MA-7, MA-8, MA-10, MA-15, and MA-25, then return the median
+    # when not enough data for the full MA, exclude that indicator
+    # base case for PastPrices having no product
+    if product not in pastPrices.keys():
+        return -1
+    if product == 'AMETHYSTS':
+        moving_averages = {25} # consider return 10000, bc centers around this price anyways
+    elif product == 'STARFRUIT':
+        moving_averages = {5, 8, 15}
+    else:
+        moving_averages = {8, 15, 20}
+    calculated_results = []
+    n = len(pastPrices[product])
+    sum_prices = 0
+    for j in range(n-1,-1,-1):
+        i = n-1-j
+        sum_prices += pastPrices[product][j]
+        if i+1 in moving_averages:
+            calculated_results.append(sum_prices / (i + 1))
+    if len(calculated_results) == 0:
+        return -1
+    index = len(calculated_results) // 2
+    calculated_results = sorted(calculated_results) 
+    if product == 'STARFRUIT':
+        return calculated_results[index] + evaluateExtrema(pastPrices, product, extremaKey) * 3
+    return calculated_results[index] # median
+   
+    
+def lastIsPeak(pastPrices, product):        
+    n = len(pastPrices[product])
+    if n < 3:
+        return False
+    return pastPrices[product][-3] < pastPrices[product][-2] and pastPrices[product][-2] > pastPrices[product][-1]
+
+def lastIsTrough(pastPrices, product):
+    n = len(pastPrices[product])
+    if n < 3:
+        return False
+    return pastPrices[product][-3] > pastPrices[product][-2] and pastPrices[product][-2] < pastPrices[product][-1]
+
+def evaluateExtrema(pastPrices, product, extremaKey):
+    # determine up or downtrend, then buy on uptrend for trough, sell on downtrend for peak
+    if len(pastPrices[extremaKey]) >= 6:         
+        # uptrend
+        if three_peaks_higher(pastPrices, extremaKey) and three_troughs_higher(pastPrices, extremaKey):
+            return 1
+        if last_four_increasing(pastPrices, product, extremaKey):
+            return 1
+        # downtrend
+        elif three_troughs_lower(pastPrices, extremaKey) and three_peaks_lower(pastPrices, extremaKey):
+            return -1
+        if last_four_decreasing(pastPrices, product, extremaKey):
+            return -1
+    return 0
+
+def last_four_increasing(pastPrices, product, extremaKey):
+    return False
+    # if extremaKey in pastPrices:
+        # if pastPrices[extremaKey][-1][0] < state.timestamp-400:
+
+def last_four_decreasing(pastPrices, product, extremaKey):
+    return False
+    # if extremaKey in pastPrices:
+# if pastPrices[extremaKey][-1][0] < state.timestamp-400:
+    
+def three_peaks_higher(pastPrices, extremaKey):
+    i = -6
+    highest = -1
+    while i < 0: 
+        if pastPrices[extremaKey][i][2]:
+            if pastPrices[extremaKey][i][1] > highest:
+                highest = pastPrices[extremaKey][i][1]
             else:
-                return (best_bid + best_ask) / 2
+                return False 
+        i += 1
+    return True
     
+def three_troughs_higher(pastPrices, extremaKey):
+    i = -6
+    highest = -1
+    while i < 0:
+        if not pastPrices[extremaKey][i][2]:
+            if pastPrices[extremaKey][i][1] > highest:
+                highest = pastPrices[extremaKey][i][1]
+            else:
+                return False
+        i += 1
+    return True
     
-    # generators dictionary of last 25 prices from all the symbols, key symbol, value list of prices
-    def parse_traderData(self, traderData: str) -> dict:
-        if traderData == "":
-            return dict()
-        res = jsonpickle.decode(traderData)
-        return res
-            
-            
-    # converts dictionary of pastPrices into a string which can be parsed as a dict the next iteration
-    def convertToStr(self, pastPrices: dict[str, list[int]]) -> str:
-        res = jsonpickle.encode(pastPrices)
-        return res
+def three_peaks_lower(pastPrices, extremaKey):
+    i = -6
+    lowest = 1000000
+    while i < 0:
+        if pastPrices[extremaKey][i][2]:
+            if pastPrices[extremaKey][i][1] < lowest:
+                lowest = pastPrices[extremaKey][i][1]
+            else:
+                return False
+        i += 1
+    return True
     
-    
-    # calculates fair price valuation based on Moving Averages
-    def calculate_fair_price(self, pastPrices: dict, product: str, extremaKey: str) -> float:
-        # initial strategy, calculate MA-3, MA-5, MA-7, MA-8, MA-10, MA-15, and MA-25, then return the median
-        # when not enough data for the full MA, exclude that indicator
-        # base case for PastPrices having no product
-        if product not in pastPrices.keys():
-            return -1
-        if product == 'AMETHYSTS':
-            moving_averages = {25} # consider return 10000, bc centers around this price anyways
-        elif product == 'STARFRUIT':
-            moving_averages = {5, 8, 15}
-        else:
-            moving_averages = {8, 15, 20}
-        calculated_results = []
-        n = len(pastPrices[product])
-        sum_prices = 0
-        for j in range(n-1,-1,-1):
-            i = n-1-j
-            sum_prices += pastPrices[product][j]
-            if i+1 in moving_averages:
-                calculated_results.append(sum_prices / (i + 1))
-        if len(calculated_results) == 0:
-            return -1
-        index = len(calculated_results) // 2
-        calculated_results = sorted(calculated_results) 
-        if product == 'STARFRUIT':
-            return calculated_results[index] + self.evaluateExtrema(pastPrices, product, extremaKey) * 3
-        return calculated_results[index] # median
-       
-        
-    def lastIsPeak(self, pastPrices, product):        
-        n = len(pastPrices[product])
-        if n < 3:
-            return False
-        return pastPrices[product][-3] < pastPrices[product][-2] and pastPrices[product][-2] > pastPrices[product][-1]
-    
-    def lastIsTrough(self, pastPrices, product):
-        n = len(pastPrices[product])
-        if n < 3:
-            return False
-        return pastPrices[product][-3] > pastPrices[product][-2] and pastPrices[product][-2] < pastPrices[product][-1]
-    
-    def evaluateExtrema(self, pastPrices, product, extremaKey):
-        # determine up or downtrend, then buy on uptrend for trough, sell on downtrend for peak
-        if len(pastPrices[extremaKey]) >= 6:         
-            # uptrend
-            if self.three_peaks_higher(pastPrices, extremaKey) and self.three_troughs_higher(pastPrices, extremaKey):
-                return 1
-            if self.last_four_increasing(pastPrices, product, extremaKey):
-                return 1
-            # downtrend
-            elif self.three_troughs_lower(pastPrices, extremaKey) and self.three_peaks_lower(pastPrices, extremaKey):
-                return -1
-            if self.last_four_decreasing(pastPrices, product, extremaKey):
-                return -1
-        return 0
-    
-    def last_four_increasing(self, pastPrices, product, extremaKey):
-        return False
-        # if extremaKey in pastPrices:
-            # if pastPrices[extremaKey][-1][0] < state.timestamp-400:
+def three_troughs_lower(pastPrices, extremaKey):
+    i = -6
+    lowest = 1000000
+    while i < 0:
+        if not pastPrices[extremaKey][i][2]:
+            if pastPrices[extremaKey][i][1] < lowest:
+                lowest = pastPrices[extremaKey][i][1]
+            else:
+                return False
+        i += 1
+    return True
 
-    def last_four_decreasing(self, pastPrices, product, extremaKey):
-        return False
-        # if extremaKey in pastPrices:
-    # if pastPrices[extremaKey][-1][0] < state.timestamp-400:
-        
-    def three_peaks_higher(self, pastPrices, extremaKey):
-        i = -6
-        highest = -1
-        while i < 0: 
-            if pastPrices[extremaKey][i][2]:
-                if pastPrices[extremaKey][i][1] > highest:
-                    highest = pastPrices[extremaKey][i][1]
-                else:
-                    return False 
-            i += 1
-        return True
-        
-    def three_troughs_higher(self, pastPrices, extremaKey):
-        i = -6
-        highest = -1
-        while i < 0:
-            if not pastPrices[extremaKey][i][2]:
-                if pastPrices[extremaKey][i][1] > highest:
-                    highest = pastPrices[extremaKey][i][1]
-                else:
-                    return False
-            i += 1
-        return True
-        
-    def three_peaks_lower(self, pastPrices, extremaKey):
-        i = -6
-        lowest = 1000000
-        while i < 0:
-            if pastPrices[extremaKey][i][2]:
-                if pastPrices[extremaKey][i][1] < lowest:
-                    lowest = pastPrices[extremaKey][i][1]
-                else:
-                    return False
-            i += 1
-        return True
-        
-    def three_troughs_lower(self, pastPrices, extremaKey):
-        i = -6
-        lowest = 1000000
-        while i < 0:
-            if not pastPrices[extremaKey][i][2]:
-                if pastPrices[extremaKey][i][1] < lowest:
-                    lowest = pastPrices[extremaKey][i][1]
-                else:
-                    return False
-            i += 1
-        return True
-    
-    def order_strategy(self, state, product, acceptable_price, midPrice, best_ask, best_bid, best_ask_amount, best_bid_amount, tradeNow, pastPrices, extremaKey):
-        order_depth: OrderDepth = state.order_depths[product]
-        orders: List[Order] = []
-        try:
-            current_position = state.position[product]
-        except KeyError:
-            current_position = 0
-        if product == 'AMETHYSTS':
-            i = 0
-            while i < len(order_depth.sell_orders) and i < 3:
-                ask_price, ask_amount = list(order_depth.sell_orders.items())[i]
-                ask_amount = -ask_amount
-                if int(ask_price) < acceptable_price:
-                    if current_position + ask_amount >= POSITION_LIMIT:
-                        orders.append(Order(product, ask_price, POSITION_LIMIT - current_position))
-                        current_position = POSITION_LIMIT
-                        break
-                    orders.append(Order(product, ask_price, ask_amount))
-                    i += 1
-                    current_position += ask_amount
-                else:
+def order_strategy(state, product, acceptable_price, midPrice, best_ask, best_bid, best_ask_amount, best_bid_amount, tradeNow, pastPrices, extremaKey):
+    order_depth: OrderDepth = state.order_depths[product]
+    orders: List[Order] = []
+    try:
+        current_position = state.position[product]
+    except KeyError:
+        current_position = 0
+    if product == 'AMETHYSTS':
+        i = 0
+        while i < len(order_depth.sell_orders) and i < 3:
+            ask_price, ask_amount = list(order_depth.sell_orders.items())[i]
+            ask_amount = -ask_amount
+            if int(ask_price) < acceptable_price:
+                if current_position + ask_amount >= POSITION_LIMIT:
+                    orders.append(Order(product, ask_price, POSITION_LIMIT - current_position))
+                    current_position = POSITION_LIMIT
                     break
-            i = 0
-            while i < len(order_depth.buy_orders) and i < 3:
-                buy_price, buy_amount = list(order_depth.buy_orders.items())[i]
-                if int(buy_price) > acceptable_price:
-                    if current_position - buy_amount <= -POSITION_LIMIT:
-                        orders.append(Order(product, buy_price, -POSITION_LIMIT - current_position))
-                        current_position = -POSITION_LIMIT
-                        break
-                    orders.append(Order(product, buy_price, -buy_amount))
-                    i += 1
-                    current_position -= buy_amount
-                else:
+                orders.append(Order(product, ask_price, ask_amount))
+                i += 1
+                current_position += ask_amount
+            else:
+                break
+        i = 0
+        while i < len(order_depth.buy_orders) and i < 3:
+            buy_price, buy_amount = list(order_depth.buy_orders.items())[i]
+            if int(buy_price) > acceptable_price:
+                if current_position - buy_amount <= -POSITION_LIMIT:
+                    orders.append(Order(product, buy_price, -POSITION_LIMIT - current_position))
+                    current_position = -POSITION_LIMIT
                     break
-            listAmount = 5
-            while listAmount > 0:
-                if midPrice < acceptable_price:
-                    listingPrice = int(min(best_bid + 1, midPrice))
-                    if current_position + listAmount < POSITION_LIMIT:
-                        orders.append(Order(product, listingPrice, listAmount))
-                        current_position += listAmount
-                        
-                else:
-                    listingPrice = int(max(best_ask - 1, midPrice))
-                    if current_position - listAmount > -POSITION_LIMIT:
-                        orders.append(Order(product, listingPrice, -listAmount))
-                        current_position -= listAmount
-                        
-                listAmount -= 1
-
-        elif product == 'STARFRUIT':
-            listAmount = 2
-            if tradeNow and not pastPrices[extremaKey][-1][2] and self.evaluateExtrema(pastPrices, product, extremaKey) > 0:
-                orders.append(Order(product, best_ask, -best_ask_amount))
-                current_position += -best_ask_amount
-                if current_position + listAmount < POSITION_LIMIT:
-                    orders.append(Order(product, best_bid+2, listAmount))
-                    current_position += listAmount
-                listAmount = 8
-            elif tradeNow and pastPrices[extremaKey][-1][2] and self.evaluateExtrema(pastPrices, product, extremaKey) < 0:
-                orders.append(Order(product, best_bid, -best_bid_amount))
-                current_position -= best_bid_amount
-                if current_position - listAmount > -POSITION_LIMIT:
-                    orders.append(Order(product, best_ask-2, -listAmount))
-                    current_position -= listAmount
-                listAmount = 8
+                orders.append(Order(product, buy_price, -buy_amount))
+                i += 1
+                current_position -= buy_amount
+            else:
+                break
+        listAmount = 5
+        while listAmount > 0:
             if midPrice < acceptable_price:
                 listingPrice = int(min(best_bid + 1, midPrice))
                 if current_position + listAmount < POSITION_LIMIT:
                     orders.append(Order(product, listingPrice, listAmount))
                     current_position += listAmount
-            elif midPrice > acceptable_price:
+                    
+            else:
                 listingPrice = int(max(best_ask - 1, midPrice))
                 if current_position - listAmount > -POSITION_LIMIT:
                     orders.append(Order(product, listingPrice, -listAmount))
                     current_position -= listAmount
-        else:
-            pass
-            # if len(order_depth.sell_orders) != 0 and int(best_ask) < acceptable_price - 10:
-            #     orders.append(Order(product, best_ask, -best_ask_amount))
-            # elif len(order_depth.buy_orders) != 0 and int(best_bid) > acceptable_price + 10:
-            #     orders.append(Order(product, best_ask, -best_ask_amount))
-        return orders
+                    
+            listAmount -= 1
+
+    elif product == 'STARFRUIT':
+        listAmount = 2
+        if tradeNow and not pastPrices[extremaKey][-1][2] and evaluateExtrema(pastPrices, product, extremaKey) > 0:
+            orders.append(Order(product, best_ask, -best_ask_amount))
+            current_position += -best_ask_amount
+            if current_position + listAmount < POSITION_LIMIT:
+                orders.append(Order(product, best_bid+2, listAmount))
+                current_position += listAmount
+            listAmount = 8
+        elif tradeNow and pastPrices[extremaKey][-1][2] and evaluateExtrema(pastPrices, product, extremaKey) < 0:
+            orders.append(Order(product, best_bid, -best_bid_amount))
+            current_position -= best_bid_amount
+            if current_position - listAmount > -POSITION_LIMIT:
+                orders.append(Order(product, best_ask-2, -listAmount))
+                current_position -= listAmount
+            listAmount = 8
+        if midPrice < acceptable_price:
+            listingPrice = int(min(best_bid + 1, midPrice))
+            if current_position + listAmount < POSITION_LIMIT:
+                orders.append(Order(product, listingPrice, listAmount))
+                current_position += listAmount
+        elif midPrice > acceptable_price:
+            listingPrice = int(max(best_ask - 1, midPrice))
+            if current_position - listAmount > -POSITION_LIMIT:
+                orders.append(Order(product, listingPrice, -listAmount))
+                current_position -= listAmount
+    else:
+        pass
+        # if len(order_depth.sell_orders) != 0 and int(best_ask) < acceptable_price - 10:
+        #     orders.append(Order(product, best_ask, -best_ask_amount))
+        # elif len(order_depth.buy_orders) != 0 and int(best_bid) > acceptable_price + 10:
+        #     orders.append(Order(product, best_ask, -best_ask_amount))
+    return orders
     
 """
 Need to implement parsing function + converting function
