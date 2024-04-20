@@ -20,7 +20,9 @@ class Trader:
             #     continue
             # if product == "ORCHIDS":
             #     continue
-            if product in {"CHOCOLATE", "STRAWBERRIES","ROSES","GIFT_BASKET"}:
+            # if product in {"CHOCOLATE", "STRAWBERRIES","ROSES","GIFT_BASKET"}:
+            #     continue
+            if product not in {"STARFRUIT", "AMETHYSTS", "ORCHIDS"}:
                 continue
             order_depth: OrderDepth = state.order_depths[product]
             # initializing the best offers from both sides to be -1 if no offers exist
@@ -43,9 +45,12 @@ class Trader:
                 pastPrices[product].append(midPrice)
             else:
                 pastPrices[product] = [midPrice]
+                
+                
             extremaKey = product + "PeaksAndTroughs"
             tradeNow = False
             if product != "AMETHYSTS":
+                save_sup_and_res(order_depth, product, pastPrices)
                 foundExtrema = False
                 if lastIsPeak(pastPrices, product):
                     timeStamp, priceExtrema, peak = state.timestamp - 100, pastPrices[product][-2], True
@@ -61,7 +66,7 @@ class Trader:
                     else:
                         pastPrices[extremaKey] = [(timeStamp, priceExtrema, peak)]
                     tradeNow = True
-
+            
                         
             acceptable_price = calculate_fair_price(pastPrices, product, extremaKey)  # Participant should calculate this value
 
@@ -135,8 +140,32 @@ def calculate_fair_price(pastPrices: dict, product: str, extremaKey: str) -> flo
     if product == 'STARFRUIT':
         return calculated_results[index] + evaluateExtrema(pastPrices, product, extremaKey) * 3
     return calculated_results[index] # median
-   
-    
+
+
+def save_sup_and_res(order_depth, product, pastPrices):
+    key1 = product + "_res"
+    key2 = product + "_sup"
+    def adjust_strength_score(key, bot_orders):
+        found = False
+        for i, prices in enumerate(bot_orders):
+            if key in pastPrices.keys():
+                if pastPrices[key][0] == prices:
+                    pastPrices[key][1] += 1 - i
+                    found = True
+                    break
+            else:
+                pastPrices[key] = [prices, 1]
+                found = True
+                break
+        if not found:
+            pastPrices[key][1] -= 3
+        if pastPrices[key][1] <= 0:
+            pastPrices[key] = [list(bot_orders)[0], 1]
+    adjust_strength_score(key1, order_depth.sell_orders.keys())
+    adjust_strength_score(key2, order_depth.buy_orders.keys())
+
+
+
 def lastIsPeak(pastPrices, product):        
     n = len(pastPrices[product])
     if n < 3:
@@ -151,7 +180,7 @@ def lastIsTrough(pastPrices, product):
 
 def evaluateExtrema(pastPrices, product, extremaKey):
     # determine up or downtrend, then buy on uptrend for trough, sell on downtrend for peak
-    if len(pastPrices[extremaKey]) >= 6:         
+    if extremaKey in pastPrices.keys() and len(pastPrices[extremaKey]) >= 6:         
         # uptrend
         if three_peaks_higher(pastPrices, extremaKey) and three_troughs_higher(pastPrices, extremaKey):
             return 1
