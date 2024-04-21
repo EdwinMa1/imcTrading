@@ -27,8 +27,8 @@ class Trader:
             #     continue
             if product not in {"STARFRUIT"}:
                 continue
-            
-            calculate_avg_cost(state.own_trades[product], pastPrices, state.timestamp, product)
+            if product in state.own_trades.keys():
+                calculate_avg_cost(state.own_trades[product], pastPrices, state.timestamp, product)
             order_depth: OrderDepth = state.order_depths[product]
             # initializing the best offers from both sides to be -1 if no offers exist
             best_ask = -1
