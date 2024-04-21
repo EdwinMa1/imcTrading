@@ -9,6 +9,9 @@ class Trader:
     def run(self, state: TradingState): # -> (dict[Symbol, Order], int, str)
         # our traderData will store the last 25 mid-prices
         pastPrices = parse_traderData(state.traderData)
+        print(state.market_trades)
+        print(state.own_trades)
+
         # Only method required. It takes all buy and sell orders for all symbols as an input, and outputs a list of orders to be sent
         print("traderData: " + state.traderData)
         print("Observations: " + str(state.observations))
@@ -22,8 +25,10 @@ class Trader:
             #     continue
             # if product in {"CHOCOLATE", "STRAWBERRIES","ROSES","GIFT_BASKET"}:
             #     continue
-            if product not in {"STARFRUIT", "AMETHYSTS", "ORCHIDS"}:
+            if product not in {"STARFRUIT"}:
                 continue
+            
+            calculate_avg_cost(state.own_trades[product], pastPrices, state.timestamp, product)
             order_depth: OrderDepth = state.order_depths[product]
             # initializing the best offers from both sides to be -1 if no offers exist
             best_ask = -1
@@ -45,8 +50,8 @@ class Trader:
                 pastPrices[product].append(midPrice)
             else:
                 pastPrices[product] = [midPrice]
-                
-                
+
+
             extremaKey = product + "PeaksAndTroughs"
             tradeNow = False
             if product != "AMETHYSTS":
@@ -61,13 +66,13 @@ class Trader:
                 if foundExtrema:
                     if extremaKey in pastPrices.keys():
                         pastPrices[extremaKey].append((timeStamp, priceExtrema, peak))
-                        if len(pastPrices[extremaKey]) > 20:
+                        if len(pastPrices[extremaKey]) > 10:
                             pastPrices[extremaKey].pop(0)
                     else:
                         pastPrices[extremaKey] = [(timeStamp, priceExtrema, peak)]
                     tradeNow = True
-            
-                        
+
+
             acceptable_price = calculate_fair_price(pastPrices, product, extremaKey)  # Participant should calculate this value
 
             # print("Acceptable price : " + str(acceptable_price))
@@ -81,8 +86,8 @@ class Trader:
             result[product] = order_strategy(state, product, acceptable_price, midPrice, best_ask, best_bid, best_ask_amount, best_bid_amount, tradeNow, pastPrices, extremaKey)
         
         traderData = convertToStr(pastPrices)  # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
-
-        conversions = 1
+        # print(state)
+        conversions = 59
         return result, conversions, traderData
     
 # gets the middle value between both sides of a bid-ask spread, i.e. the current price valuation, returns -1 if no spread exists
@@ -141,7 +146,40 @@ def calculate_fair_price(pastPrices: dict, product: str, extremaKey: str) -> flo
         return calculated_results[index] + evaluateExtrema(pastPrices, product, extremaKey) * 3
     return calculated_results[index] # median
 
+def calculate_avg_cost(prevTrades, pastPrices, timestamp, product):
+    for trade in prevTrades:
+        if timestamp != trade.timestamp + 100:
+            break
+        if trade.buyer == 'SUBMISSION':
+            quant = trade.quantity
+        else:
+            # trade.seller == 'SUBMISSION'
+            quant = -trade.quantity
+        if "avgCost" not in pastPrices.keys():
+            pos = {product: [trade.price, quant]}
+            pastPrices["avgCost"] = pos
+        elif product not in pastPrices["avgCost"].keys():
+            pos = {product: [trade.price, quant]}
+            pastPrices["avgCost"] = pos
+        else:
+            avg_cost, amnt = pastPrices["avgCost"][product] 
+            new_pos = quant + amnt
+            # ignore realized profit
+            if new_pos > 0 > amnt:
+                #flip from short to long
+                pastPrices["avgCost"][product] = [trade.price, new_pos]
+            elif new_pos < 0 < amnt:
+                # flip from long to short
+                pastPrices["avgCost"][product] = [trade.price, new_pos]
+            # elif abs(amnt) > abs(quant):
+            #     # makes lesser positions cancel
+            #     pastPrices["avgCost"][product] = [avg_cost, new_pos]
+            else:
+                new_avg_cost = (amnt * avg_cost + quant * trade.price) / new_pos
+                pastPrices["avgCost"][product] = [new_avg_cost, new_pos]
 
+                
+            
 def save_sup_and_res(order_depth, product, pastPrices):
     key1 = product + "_res"
     key2 = product + "_sup"
