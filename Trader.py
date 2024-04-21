@@ -126,25 +126,25 @@ def calculate_fair_price(pastPrices: dict, product: str, extremaKey: str) -> flo
         return -1
     if product == 'AMETHYSTS':
         moving_averages = {25} # consider return 10000, bc centers around this price anyways
-    elif product == 'STARFRUIT':
-        moving_averages = {5, 8, 15}
-    else:
-        moving_averages = {8, 15, 20}
-    calculated_results = []
-    n = len(pastPrices[product])
-    sum_prices = 0
-    for j in range(n-1,-1,-1):
-        i = n-1-j
-        sum_prices += pastPrices[product][j]
-        if i+1 in moving_averages:
-            calculated_results.append(sum_prices / (i + 1))
-    if len(calculated_results) == 0:
-        return -1
-    index = len(calculated_results) // 2
-    calculated_results = sorted(calculated_results) 
+        calculated_results = []
+        n = len(pastPrices[product])
+        sum_prices = 0
+        for j in range(n-1,-1,-1):
+            i = n-1-j
+            sum_prices += pastPrices[product][j]
+            if i+1 in moving_averages:
+                calculated_results.append(sum_prices / (i + 1))
+        if len(calculated_results) == 0:
+            return -1
+        index = len(calculated_results) // 2
+        calculated_results = sorted(calculated_results)
+        return calculated_results[index]  # median
     if product == 'STARFRUIT':
-        return calculated_results[index] + evaluateExtrema(pastPrices, product, extremaKey) * 3
-    return calculated_results[index] # median
+        midPrice = pastPrices[product + "_res"][0] + pastPrices[product + "_sup"][0]
+        midPrice /= 2
+        return midPrice + pastPrices[product+"Broke"] * 2 + evaluateExtrema(pastPrices, product, extremaKey) * 3
+    else:
+        return 0
 
 def calculate_avg_cost(prevTrades, pastPrices, timestamp, product):
     for trade in prevTrades:
@@ -195,10 +195,15 @@ def save_sup_and_res(order_depth, product, pastPrices):
                 pastPrices[key] = [prices, 1]
                 found = True
                 break
+        pastPrices[product + 'Broke'] = 0
         if not found:
             pastPrices[key][1] -= 3
         if pastPrices[key][1] <= 0:
             pastPrices[key] = [list(bot_orders)[0], 1]
+            if 'res' in key: 
+                pastPrices[product+'Broke'] = 1
+            if 'sup' in key: 
+                pastPrices[product+'Broke'] = -1
     adjust_strength_score(key1, order_depth.sell_orders.keys())
     adjust_strength_score(key2, order_depth.buy_orders.keys())
 
@@ -222,24 +227,26 @@ def evaluateExtrema(pastPrices, product, extremaKey):
         # uptrend
         if three_peaks_higher(pastPrices, extremaKey) and three_troughs_higher(pastPrices, extremaKey):
             return 1
-        if last_four_increasing(pastPrices, product, extremaKey):
+        if last_four_increasing(pastPrices, product):
             return 1
         # downtrend
         elif three_troughs_lower(pastPrices, extremaKey) and three_peaks_lower(pastPrices, extremaKey):
             return -1
-        if last_four_decreasing(pastPrices, product, extremaKey):
+        if last_four_decreasing(pastPrices, product):
             return -1
     return 0
 
-def last_four_increasing(pastPrices, product, extremaKey):
-    return False
-    # if extremaKey in pastPrices:
-        # if pastPrices[extremaKey][-1][0] < state.timestamp-400:
-
-def last_four_decreasing(pastPrices, product, extremaKey):
-    return False
-    # if extremaKey in pastPrices:
-# if pastPrices[extremaKey][-1][0] < state.timestamp-400:
+def last_four_increasing(pastPrices, product):
+    for i in range(len(pastPrices[product]) - 2, len(pastPrices[product]) - 6, -1):
+        if not pastPrices[product][i] < pastPrices[product][i+1]:
+            return False
+    return True
+            
+def last_four_decreasing(pastPrices, product):
+    for i in range(len(pastPrices[product]) - 2, len(pastPrices[product]) - 6, -1):
+        if not pastPrices[product][i] > pastPrices[product][i + 1]:
+            return False
+    return True
     
 def three_peaks_higher(pastPrices, extremaKey):
     i = -6
