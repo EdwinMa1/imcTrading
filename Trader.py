@@ -23,10 +23,10 @@ class Trader:
             #     continue
             # if product == "ORCHIDS":
             #     continue
-            # if product in {"CHOCOLATE", "STRAWBERRIES","ROSES","GIFT_BASKET"}:
-            #     continue
-            if product not in {"STARFRUIT"}:
+            if product in {"CHOCOLATE", "STRAWBERRIES","ROSES","", "COCONUT", "COCONUT_COUPON"}:
                 continue
+            # if product not in {"STARFRUIT"}:
+            #     continue
             if product in state.own_trades.keys():
                 calculate_avg_cost(state.own_trades[product], pastPrices, state.timestamp, product)
             order_depth: OrderDepth = state.order_depths[product]
@@ -87,7 +87,7 @@ class Trader:
         
         traderData = convertToStr(pastPrices)  # String value holding Trader state data required. It will be delivered as TradingState.traderData on next execution.
         # print(state)
-        conversions = 59
+        conversions = 0
         return result, conversions, traderData
     
 # gets the middle value between both sides of a bid-ask spread, i.e. the current price valuation, returns -1 if no spread exists
@@ -142,7 +142,7 @@ def calculate_fair_price(pastPrices: dict, product: str, extremaKey: str) -> flo
     if product == 'STARFRUIT':
         midPrice = pastPrices[product + "_res"][0] + pastPrices[product + "_sup"][0]
         midPrice /= 2
-        return midPrice + pastPrices[product+"Broke"] * 2 + evaluateExtrema(pastPrices, product, extremaKey) * 3
+        return midPrice + pastPrices[product+"Broke"] # + evaluateExtrema(pastPrices, product, extremaKey) * 2
     else:
         return 0
 
@@ -165,15 +165,17 @@ def calculate_avg_cost(prevTrades, pastPrices, timestamp, product):
             avg_cost, amnt = pastPrices["avgCost"][product] 
             new_pos = quant + amnt
             # ignore realized profit
-            if new_pos > 0 > amnt:
+            if new_pos == 0:
+                del pastPrices["avgCost"][product]
+            elif new_pos > 0 > amnt:
                 #flip from short to long
                 pastPrices["avgCost"][product] = [trade.price, new_pos]
             elif new_pos < 0 < amnt:
                 # flip from long to short
                 pastPrices["avgCost"][product] = [trade.price, new_pos]
-            # elif abs(amnt) > abs(quant):
-            #     # makes lesser positions cancel
-            #     pastPrices["avgCost"][product] = [avg_cost, new_pos]
+            elif abs(amnt) > abs(quant):
+                # makes lesser positions cancel
+                pastPrices["avgCost"][product] = [avg_cost, new_pos]
             else:
                 new_avg_cost = (amnt * avg_cost + quant * trade.price) / new_pos
                 pastPrices["avgCost"][product] = [new_avg_cost, new_pos]
@@ -195,18 +197,33 @@ def save_sup_and_res(order_depth, product, pastPrices):
                 pastPrices[key] = [prices, 1]
                 found = True
                 break
-        pastPrices[product + 'Broke'] = 0
         if not found:
             pastPrices[key][1] -= 3
+
         if pastPrices[key][1] <= 0:
-            pastPrices[key] = [list(bot_orders)[0], 1]
-            if 'res' in key: 
-                pastPrices[product+'Broke'] = 1
-            if 'sup' in key: 
-                pastPrices[product+'Broke'] = -1
+            if len(bot_orders) == 0:
+                return
+            new_price = list(bot_orders)[0]
+            if 'res' in key:
+                if new_price < pastPrices[key][0]:
+                    pastPrices[product + 'Broke'] -= 2
+                else:
+                    pastPrices[product+'Broke'] += 3
+            if 'sup' in key:
+                if new_price < pastPrices[key][0]:
+                    pastPrices[product + 'Broke'] -= 3
+                else:
+                    pastPrices[product + 'Broke'] += 2
+            pastPrices[key] = [new_price, 1]
+   
+    if (product + 'Broke') not in pastPrices.keys(): 
+        pastPrices[product+'Broke'] = 0
     adjust_strength_score(key1, order_depth.sell_orders.keys())
     adjust_strength_score(key2, order_depth.buy_orders.keys())
-
+    if pastPrices[product + 'Broke'] < 0:
+        pastPrices[product + 'Broke'] += 4
+    elif pastPrices[product + 'Broke'] > 0:
+        pastPrices[product + 'Broke'] -= 4
 
 
 def lastIsPeak(pastPrices, product):        
@@ -298,12 +315,13 @@ def three_troughs_lower(pastPrices, extremaKey):
 
 def order_strategy(state, product, acceptable_price, midPrice, best_ask, best_bid, best_ask_amount, best_bid_amount, tradeNow, pastPrices, extremaKey):
     order_depth: OrderDepth = state.order_depths[product]
-    orders: List[Order] = []
+    true_orders = []
     try:
         current_position = state.position[product]
     except KeyError:
         current_position = 0
     if product == 'AMETHYSTS':
+        orders: List[Order] = []
         i = 0
         while i < len(order_depth.sell_orders) and i < 3:
             ask_price, ask_amount = list(order_depth.sell_orders.items())[i]
@@ -346,40 +364,203 @@ def order_strategy(state, product, acceptable_price, midPrice, best_ask, best_bi
                     current_position -= listAmount
                     
             listAmount -= 1
+        true_orders.extend(prevent_limit_exceed(orders, state, product, pastPrices))
 
     elif product == 'STARFRUIT':
-        listAmount = 2
-        if tradeNow and not pastPrices[extremaKey][-1][2] and evaluateExtrema(pastPrices, product, extremaKey) > 0:
-            orders.append(Order(product, best_ask, -best_ask_amount))
-            current_position += -best_ask_amount
-            if current_position + listAmount < POSITION_LIMIT:
-                orders.append(Order(product, best_bid+2, listAmount))
-                current_position += listAmount
-            listAmount = 8
-        elif tradeNow and pastPrices[extremaKey][-1][2] and evaluateExtrema(pastPrices, product, extremaKey) < 0:
-            orders.append(Order(product, best_bid, -best_bid_amount))
-            current_position -= best_bid_amount
-            if current_position - listAmount > -POSITION_LIMIT:
-                orders.append(Order(product, best_ask-2, -listAmount))
-                current_position -= listAmount
-            listAmount = 8
-        if midPrice < acceptable_price:
-            listingPrice = int(min(best_bid + 1, midPrice))
-            if current_position + listAmount < POSITION_LIMIT:
-                orders.append(Order(product, listingPrice, listAmount))
-                current_position += listAmount
-        elif midPrice > acceptable_price:
-            listingPrice = int(max(best_ask - 1, midPrice))
-            if current_position - listAmount > -POSITION_LIMIT:
-                orders.append(Order(product, listingPrice, -listAmount))
-                current_position -= listAmount
+        orders: List[Order] = []
+        try:
+            avg_cost, amnt = pastPrices['avgCost'][product]
+        except KeyError:
+            amnt = 0
+            avg_cost = -1
+        try:
+            if pastPrices[product+'_res'][1] > 4 and pastPrices[product+'_sup'][1] > 4:
+                if amnt == 0 and best_ask < acceptable_price:
+                    orders.append(Order(product, best_ask, -best_ask_amount // 3))
+                    current_position -= best_ask_amount
+                if amnt == 0 and best_bid > acceptable_price:
+                    orders.append(Order(product, best_bid, -best_bid_amount // 3))
+                    current_position -= best_bid_amount
+                if acceptable_price < avg_cost - 10 or (amnt < 0 and acceptable_price < avg_cost-5):
+                    #buy
+                    if current_position -(amnt+1)//4 <= POSITION_LIMIT:
+                        orders.append(Order(product, int(acceptable_price), -(amnt)//4+1))
+                        current_position += -(amnt+1)//4 +1
+                if acceptable_price > avg_cost + 10 or (amnt > 0 and acceptable_price < avg_cost+5):
+                    #sell
+                    if current_position -(amnt+1)//4 >= -POSITION_LIMIT:
+                        orders.append(Order(product, int(acceptable_price), -(amnt)//4-1))
+                        current_position += -(amnt)//4 -1
+        except KeyError:
+            pass
+        for listAmount in range(6, 3, -1):
+            if avg_cost != -1 and avg_cost < acceptable_price + 6:
+                if current_position - listAmount >= -POSITION_LIMIT:
+                    orders.append(Order(product, int(acceptable_price+listAmount/1.5), -listAmount))
+                    current_position -= listAmount
+                    
+            if avg_cost != -1 and avg_cost > acceptable_price - 6:
+                if current_position + listAmount <= POSITION_LIMIT:
+                    orders.append(Order(product, int(acceptable_price-listAmount/1.5), listAmount))
+                    current_position += listAmount
+        if extremaKey in pastPrices.keys():
+            if evaluateExtrema(pastPrices, product, extremaKey) > 0 and  \
+                    (not pastPrices[extremaKey][-1][2] or last_four_decreasing(pastPrices, product)):
+                if current_position + POSITION_LIMIT // 5 <= POSITION_LIMIT:
+                    orders.append(Order(product, min(acceptable_price, best_ask-1), POSITION_LIMIT // 5))
+                    current_position += POSITION_LIMIT // 5
+            if evaluateExtrema(pastPrices, product, extremaKey) < 0 and \
+                    ( pastPrices[extremaKey][-1][2] or last_four_increasing(pastPrices, product)):
+                # trading down on peak
+                if current_position - POSITION_LIMIT // 5 >= -POSITION_LIMIT:
+                    orders.append(Order(product, max(acceptable_price, best_bid+1), -POSITION_LIMIT // 5))
+                    current_position -= POSITION_LIMIT // 5
+            if pastPrices[product+"Broke"] > 1 and  \
+                    (not pastPrices[extremaKey][-1][2] or last_four_decreasing(pastPrices, product)):
+                if current_position + pastPrices[product+"Broke"] <= POSITION_LIMIT:
+                    orders.append(Order(product, pastPrices[product+'_sup'][0] + 1, int(pastPrices[product+"Broke"])))
+                    current_position += pastPrices[product+"Broke"]
+            if pastPrices[product+"Broke"] < -1 and \
+                    ( pastPrices[extremaKey][-1][2] or last_four_increasing(pastPrices, product)):
+                if current_position + pastPrices[product+"Broke"] >= -POSITION_LIMIT:
+                    orders.append(Order(product, pastPrices[product+'_res'][0]- 1, int(pastPrices[product+"Broke"])))
+                    current_position += pastPrices[product+"Broke"]
+        true_orders.extend(prevent_limit_exceed(orders, state, product, pastPrices))
     else:
-        pass
-        # if len(order_depth.sell_orders) != 0 and int(best_ask) < acceptable_price - 10:
-        #     orders.append(Order(product, best_ask, -best_ask_amount))
-        # elif len(order_depth.buy_orders) != 0 and int(best_bid) > acceptable_price + 10:
-        #     orders.append(Order(product, best_ask, -best_ask_amount))
-    return orders
+        orders: List[Order] = []
+        try:
+            avg_cost, amnt = pastPrices['avgCost'][product]
+        except KeyError:
+            amnt = 0
+            avg_cost = -1
+        try:
+            if pastPrices[product + '_res'][1] > 4 and pastPrices[product + '_sup'][1] > 4:
+                if amnt == 0 and best_ask < acceptable_price:
+                    orders.append(Order(product, best_ask, -best_ask_amount // 3))
+                    current_position -= best_ask_amount
+                if amnt == 0 and best_bid > acceptable_price:
+                    orders.append(Order(product, best_bid, -best_bid_amount // 3))
+                    current_position -= best_bid_amount
+                if acceptable_price < avg_cost - 10 or (
+                        amnt < 0 and acceptable_price < avg_cost - 5):
+                    # buy
+                    if current_position - (amnt + 1) // 4 <= POSITION_LIMIT:
+                        orders.append(Order(product, int(acceptable_price), -(amnt) // 4 + 1))
+                        current_position += -(amnt + 1) // 4 + 1
+                if acceptable_price > avg_cost + 10 or (
+                        amnt > 0 and acceptable_price < avg_cost + 5):
+                    # sell
+                    if current_position - (amnt + 1) // 4 >= -POSITION_LIMIT:
+                        orders.append(Order(product, int(acceptable_price), -(amnt) // 4 - 1))
+                        current_position += -(amnt) // 4 - 1
+        except KeyError:
+            pass
+        for listAmount in range(6, 3, -1):
+            if avg_cost != -1 and avg_cost < acceptable_price + 6:
+                if current_position - listAmount >= -POSITION_LIMIT:
+                    orders.append(
+                        Order(product, int(acceptable_price + listAmount / 1.5), -listAmount))
+                    current_position -= listAmount
+
+            if avg_cost != -1 and avg_cost > acceptable_price - 6:
+                if current_position + listAmount <= POSITION_LIMIT:
+                    orders.append(
+                        Order(product, int(acceptable_price - listAmount / 1.5), listAmount))
+                    current_position += listAmount
+        if extremaKey in pastPrices.keys():
+            if evaluateExtrema(pastPrices, product, extremaKey) > 0 and \
+                    (not pastPrices[extremaKey][-1][2] or last_four_decreasing(pastPrices,
+                                                                               product)):
+                if current_position + POSITION_LIMIT // 5 <= POSITION_LIMIT:
+                    orders.append(
+                        Order(product, min(acceptable_price, best_ask - 1), POSITION_LIMIT // 5))
+                    current_position += POSITION_LIMIT // 5
+            if evaluateExtrema(pastPrices, product, extremaKey) < 0 and \
+                    (pastPrices[extremaKey][-1][2] or last_four_increasing(pastPrices, product)):
+                # trading down on peak
+                if current_position - POSITION_LIMIT // 5 >= -POSITION_LIMIT:
+                    orders.append(
+                        Order(product, max(acceptable_price, best_bid + 1), -POSITION_LIMIT // 5))
+                    current_position -= POSITION_LIMIT // 5
+            if pastPrices[product + "Broke"] > 1 and \
+                    (not pastPrices[extremaKey][-1][2] or last_four_decreasing(pastPrices,
+                                                                               product)):
+                if current_position + pastPrices[product + "Broke"] <= POSITION_LIMIT:
+                    orders.append(Order(product, pastPrices[product + '_sup'][0] + 1,
+                                        int(pastPrices[product + "Broke"])))
+                    current_position += pastPrices[product + "Broke"]
+            if pastPrices[product + "Broke"] < -1 and \
+                    (pastPrices[extremaKey][-1][2] or last_four_increasing(pastPrices, product)):
+                if current_position + pastPrices[product + "Broke"] >= -POSITION_LIMIT:
+                    orders.append(Order(product, pastPrices[product + '_res'][0] - 1,
+                                        int(pastPrices[product + "Broke"])))
+                    current_position += pastPrices[product + "Broke"]
+        true_orders.extend(prevent_limit_exceed(orders, state, product, pastPrices))
+    return true_orders
+    
+def prevent_limit_exceed(orders, state, product, pastPrices):
+    """return true order list"""
+    if product in state.position.keys():
+        true_position = state.position[product]
+    else:
+        true_position = 0
+    kept_orders = []
+    total_long = 0
+    longs = []
+    total_short = 0
+    shorts = []
+    for order in orders:
+        if order.quantity > 0:
+            total_long += order.quantity
+            longs.append([order.price, order.quantity])
+        elif order.quantity < 0:
+            total_short -= order.quantity
+            shorts.append([order.price, order.quantity])
+    if true_position + total_long <= POSITION_LIMIT and true_position - total_short >= -POSITION_LIMIT:
+        return orders
+    longs = sorted(longs, reverse = True)
+    shorts = sorted(shorts)
+    if true_position + total_long <= POSITION_LIMIT and true_position - total_short < -POSITION_LIMIT:
+        for price, quant in shorts:
+            if true_position - total_short - (quant // 2) >= -POSITION_LIMIT:
+                kept_orders.append(Order(product, price, int(quant//2)))
+            elif true_position - total_short - quant >= -POSITION_LIMIT:
+                pass
+            else:
+                kept_orders.append(Order(product, price, quant))
+        for price, quant in longs:
+            kept_orders.append(Order(product, price, quant))
+    elif true_position + total_long > POSITION_LIMIT and true_position - total_short >= -POSITION_LIMIT:
+        for price, quant in longs:
+            if true_position + total_long - (quant // 2) <= POSITION_LIMIT:
+                kept_orders.append(Order(product, price, int(quant // 2)))
+            elif true_position + total_long - quant <= POSITION_LIMIT:
+                pass
+            else:
+                kept_orders.append(Order(product, price, quant))
+        for price, quant in shorts:
+            kept_orders.append(Order(product, price, quant))
+    elif true_position + total_long > POSITION_LIMIT and true_position - total_short < -POSITION_LIMIT:
+        i = 0
+        j = 0
+        while i < len(shorts) and j < len(longs):
+            if shorts[i][0] < longs[j][0]:
+                pass
+            else:
+                kept_orders.append(Order(product, shorts[i][0], shorts[i][1]))
+                kept_orders.append(Order(product, longs[i][0], longs[i][0]))
+            i += 1
+            j += 1
+        total_short, total_long = 0, 0
+        for order in kept_orders:
+            if order.quantity > 0:
+                total_long += order.quantity
+            elif order.quantity < 0:
+                total_short -= order.quantity
+        if true_position + total_long > POSITION_LIMIT or true_position - total_short < -POSITION_LIMIT:
+            kept_orders = kept_orders[2:]
+    return kept_orders
+            
     
 """
 Need to implement parsing function + converting function

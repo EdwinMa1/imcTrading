@@ -19,20 +19,20 @@ class TestTrader(unittest.TestCase):
         pastPrices = {"Fruit1": [50, 2]}
         o = datamodel.OrderDepth({40: 3}, {53: 1, 55: 8})
         save_sup_and_res(o, 'FRUIT1', pastPrices)
-        self.assertEqual(pastPrices, {"Fruit1": [50, 2], "FRUIT1_res": [53, 1], "FRUIT1_sup": [40, 1]})
+        self.assertEqual(pastPrices, {'FRUIT1Broke': 0, "Fruit1": [50, 2], "FRUIT1_res": [53, 1], "FRUIT1_sup": [40, 1]})
         
         o = datamodel.OrderDepth({40: 3}, {55: 8})
         save_sup_and_res(o, 'FRUIT1', pastPrices)
-        self.assertEqual(pastPrices, {"Fruit1": [50, 2], "FRUIT1_res": [55, 1], "FRUIT1_sup": [40, 2]})
-        
+        self.assertEqual(pastPrices, {'FRUIT1Broke': 3, "Fruit1": [50, 2], "FRUIT1_res": [55, 1], "FRUIT1_sup": [40, 2]})
+        # 
         o = datamodel.OrderDepth({42:10, 40: 3}, {55: 8})
         save_sup_and_res(o, 'FRUIT1', pastPrices)
         self.assertEqual(pastPrices,
-                         {"Fruit1": [50, 2], "FRUIT1_res": [55, 2], "FRUIT1_sup": [40, 2]})
+                         {'FRUIT1Broke': 0, "Fruit1": [50, 2], "FRUIT1_res": [55, 2], "FRUIT1_sup": [40, 2]})
         o = datamodel.OrderDepth({42: 10}, {55: 8})
         save_sup_and_res(o, 'FRUIT1', pastPrices)
         self.assertEqual(pastPrices,
-                         {"Fruit1": [50, 2], "FRUIT1_res": [55, 3], "FRUIT1_sup": [42, 1]})
+                         {'FRUIT1Broke': 2, "Fruit1": [50, 2], "FRUIT1_res": [55, 3], "FRUIT1_sup": [42, 1]})
         
     def test_calc_avg_cost_buyer(self):
         own_trades = {'STARFRUIT': [datamodel.Trade(symbol= "STARFRUIT", price = 5000, quantity = 2, buyer = "SUBMISSION", seller = None, timestamp = 1700)]}
@@ -41,9 +41,8 @@ class TestTrader(unittest.TestCase):
         time = 1800
         calculate_avg_cost(own_trades['STARFRUIT'], pastPrices, time, 'STARFRUIT')
         self.assertEqual(pastPrices, {'avgCost': {'STARFRUIT': [5200, 3]}})
-        print(type(pastPrices["avgCost"]))
-        # calculate_avg_cost(own_trades['STARFRUIT'], pastPrices, time+100, 'STARFRUIT')
-        # self.assertEqual(pastPrices, {'avgCost': {'STARFRUIT': [5200, 3]}})
+        calculate_avg_cost(own_trades['STARFRUIT'], pastPrices, time+100, 'STARFRUIT')
+        self.assertEqual(pastPrices, {'avgCost': {'STARFRUIT': [5200, 3]}})
     
     def test_calc_avg_cost_seller(self):
         own_trades = {'STARFRUIT': [datamodel.Trade(symbol= "STARFRUIT", price = 6200, quantity = 6, buyer = None, seller = "SUBMISSION", timestamp = 1700)]}
