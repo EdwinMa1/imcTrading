@@ -562,17 +562,3 @@ def prevent_limit_exceed(orders, state, product, pastPrices):
     return kept_orders
             
     
-"""
-Need to implement parsing function + converting function
-We are only submitting trader.py
-AWS lambda prevents us from consistently storing certain things like dictionaries in memory,
- hence we need traderData string which is passed to the next iteration every iteration
-Possible problems:
- 1. how will our trades affect the market...is this even a worry on such a large scale?
- 2. We did not implement the strategies for submitting the actual orders, its currently set up to trade the best offers that meet our acceptable price
-    a. * How do we address position limits? *
-    b. Canceled orders not considered
-    c. Is there any sort of time race against competitors
-    d. If we change this preset strategy, should we prioritize trading as much that meet our acceptable price, or only the best, or something in between?
- 3. Is our algorithm efficient, could it be better?
-"""
